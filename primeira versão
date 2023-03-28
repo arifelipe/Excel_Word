@@ -1,0 +1,81 @@
+import os
+import shutil
+import win32com.client
+import num2words
+
+# Dicionário que associa cada string de busca a uma célula do arquivo do Excel
+search_strings = {
+    "nomedotecnico": (2, 1),
+    "nomedonucleo": (2, 2),
+    "tipodeatividade": (2, 3),
+    "nomeatividade": (2, 4),
+    "datadaatividade": (2, 5),
+    "horarioinicio": (2, 6),
+    "horariotermino": (2, 7),
+    "localatividade": (2, 8),
+    "valornumerico": (2, 9),
+    "valorporextenso": (2, 10),
+    "valorcache": (2, 11),
+    "valorproducao": (2, 12),
+}
+
+# Abre o arquivo do Word
+word = win32com.client.Dispatch("Word.Application")
+# word.Visible = True  # Remova essa linha para abrir o arquivo no background
+word_doc = word.Documents.Open(os.path.join(os.getcwd(), 'carta_proposta.docx'))
+
+# Abre o arquivo do Excel
+excel = win32com.client.Dispatch("Excel.Application")
+# excel.Visible = True  # Remova essa linha para abrir o arquivo no background
+excel_wb = excel.Workbooks.Open(os.path.join(os.getcwd(), 'base_dados.xlsx'))
+
+# Recupera o valor monetário da célula (2, 9) do arquivo do Excel
+valor_monetario = excel_wb.Worksheets(1).Cells(2, 9).Value
+
+# Converte o valor monetário para o formato por extenso em reais com centavos
+valor_extenso = num2words.num2words(valor_monetario, lang='pt_BR', to='currency')
+
+# Insere o valor por extenso na célula (2, 10) do arquivo do Excel
+excel_wb.Worksheets(1).Cells(2, 10).Value = valor_extenso
+
+# Para cada string de busca
+for search_string, cell_coordinates in search_strings.items():
+    # Realiza a busca da string no documento do Word
+    find = word_doc.Content.Find
+    find.ClearFormatting()
+    find.Text = search_string
+
+    # Enquanto houverem ocorrências da string no documento
+    while True:
+        # Realiza a busca a partir da posição atual do cursor
+        find.Execute(Forward=True, Wrap=False)
+
+        if not find.Found:
+            # Se não houver mais ocorrências da string, sai do loop
+            break
+
+        # Recupera o conteúdo da célula desejada do arquivo do Excel
+        row, col = cell_coordinates
+        cell_value = excel_wb.Worksheets(1).Cells(row, col).Value
+
+        # Substitui a ocorrência da string pelo conteúdo da célula
+        find.Parent.Text = cell_value
+
+# Salva uma cópia do arquivo do Word com as alterações efetuadas
+nome_arquivo_word_alterado = f"arquivo_alterado_{excel_wb.Worksheets(1).Cells(2, 4).Value}.docx"
+word_doc.SaveAs(os.path.join(os.getcwd(), nome_arquivo_word_alterado))
+
+# Fecha o arquivo do Word sem salvar
+word_doc.Close(SaveChanges=False)
+
+# Fecha o Word
+word.Quit()
+
+# Salva o arquivo do Excel
+excel_wb.Save()
+
+# Fecha o arquivo do Excel
+excel_wb.Close()
+
+# Fecha o Excel
+excel.Quit()
