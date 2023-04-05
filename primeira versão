@@ -1,74 +1,78 @@
-import openpyxl
+from openpyxl import load_workbook
 from docx import Document
 import locale
 import os
 import shutil
-import num2words
+from num2words import num2words
 
 # Defina o locale para português brasileiro
-locale.setlocale(locale.LC_ALL, 'pt_BR.utf8')
+locale.setlocale(locale.LC_ALL,'pt_BR.utf8')
 
 # Carregue o arquivo do Excel
-wb = openpyxl.load_workbook('base_dados.xlsx')
+wb = load_workbook('base_dados.xlsx')
 ws = wb.active
-
-# Carregue o arquivo do Word
-doc = Document('carta_proposta.docx')
 
 # Mapeie as strings específicas para as células específicas
 mapa = {
-    "nomedotecnico": (2, 1),
-    "nomedonucleo": (2, 2),
-    "tipodeatividade": (2, 3),
-    "nomeatividade": (2, 4),
-    "datadaatividade": (2, 5),
-    "horarioinicio": (2, 6),
-    "horariotermino": (2, 7),
-    "localatividade": (2, 8),
-    "valornumerico": (2, 9),
-    "valorporextenso": (2, 10),
-    "valorcache": (2, 11),
-    "valorproducao": (2, 12),
+    "nomedotecnico": (2,1),
+    "nomedonucleo": (2,2),
+    "tipodeatividade": (2,3),
+    "nomeatividade": (2,4),
+    "datadaatividade": (2,5),
+    "horarioinicio": (2,6),
+    "horariotermino": (2,7),
+    "localatividade": (2,8),
+    "valornumerico": (2,9),
+    "valorporextenso": (2,10),
+    "valorcache": (2,11),
+    "valorproducao": (2,12),
 }
 
 # Obtenha o número de linhas com conteúdo
 num_linhas = len([row for row in ws if any([cell.value for cell in row])])
 
-# Itere sobre cada linha com conteúdo
-for i in range(1, num_linhas + 1):
-    # Crie uma cópia do arquivo do Word
-    shutil.copy('carta_proposta.docx', f'carta_proposta_{i}.docx')
-
-    # Carregue a cópia do arquivo do Word
-    doc_copia = Document(f'carta_proposta_{i}.docx')
-
-    # Substitua as strings específicas pelas células específicas
-    for p in doc_copia.paragraphs:
-        for key, value in mapa.items():
-            if key in p.text:
-                p.text = p.text.replace(key, str(ws.cell(row=i, column=value[1]).value))
-
-    # Escreva o valor monetário na célula à direita
-    valor = ws.cell(row=i, column=9).value
-
+# Escreva o valor monetário por extenso na coluna J para cada linha com conteúdo
+for i, row in enumerate(ws.iter_rows(min_row=2), start=2):
+    valor = row[8].value
+    
     # Verifique se o valor está no formato correto e converta-o se necessário
     if isinstance(valor, str):
-        valor = valor.replace('R$', '').replace('.', '').replace(',', '.').strip()
         try:
-            valor = float(valor)
+            valor = float(valor.replace('R$','').replace('.','').replace(',','.').strip())
         except ValueError:
+            # Trate valores inválidos aqui
             pass
 
-    if isinstance(valor, (int, float)):
-        ws.cell(row=i, column=10).value = locale.currency(valor, grouping=True)
-        ws.cell(row=i, column=11).value = num2words.num2words(valor, lang='pt_BR', to='currency')
-    else:
-        # Trate valores inválidos aqui
-        pass
-
-    # Salve o arquivo do Word alterado
-    nome_atividade = ws.cell(row=i, column=6).value
-    doc_copia.save(f'carta_proposta_{nome_atividade}.docx')
+    if isinstance(valor,(int,float)):
+        row[9].value=num2words(valor,
+lang='pt_BR',to='currency')
 
 # Salve o arquivo do Excel alterado
-wb.save('exemplo_alterado.xlsx')
+wb.save('base_dados.xlsx')
+
+# Verifique se a pasta "cartas proposta" existe e crie-a se não existir
+if not os.path.exists('cartas proposta'):
+    os.makedirs('cartas proposta')
+
+# Itere sobre cada linha com conteúdo a partir da segunda linha
+for i, row in enumerate(ws.iter_rows(min_row=2), start=2):
+    # Verifique se a linha contém conteúdo antes de criar um arquivo do Word para ela
+    if any([cell.value for cell in row]):
+        # Carregue o arquivo do Word
+        doc = Document('carta_proposta.docx')
+        
+        # Substitua as strings específicas pelas células específicas usando o objeto Run
+        for p in doc.paragraphs:
+            for r in p.runs:
+                for key,value in mapa.items():
+                    if key == 'valornumerico':
+                        cell = row[value[1]-1]
+                        valor_formatado = 'R$ {:,.2f}'.format(cell.value).replace(',', 'X').replace('.', ',').replace('X', '.')
+                        r.text = r.text.replace(key,valor_formatado)
+                    elif key in r.text:
+                        r.text = r.text.replace(key,str(row[value[1]-1].value))
+
+        # Salve o arquivo do Word alterado na pasta "cartas proposta"
+        nome_atividade = row[3].value
+        doc.save(os.path.join('cartas proposta', f'Carta proposta - {nome_atividade}.docx'))
+		#autocarta beta 2.01 - Ari Felipe Miaciro Correia
